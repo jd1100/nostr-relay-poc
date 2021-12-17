@@ -3,6 +3,7 @@ module github.com/fiatjaf/nostr-relay
 go 1.15
 
 require (
+	github.com/dgraph-io/badger/v3 v3.2103.2 // indirect
 	github.com/fiatjaf/go-nostr v0.1.1
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
@@ -12,4 +13,5 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.6
 	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.20.0
+	github.com/timshannon/badgerhold/v4 v4.0.1 // indirect
 )

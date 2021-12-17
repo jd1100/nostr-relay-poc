@@ -12,6 +12,7 @@ import (
 	"github.com/fiatjaf/go-nostr/event"
 	"github.com/fiatjaf/go-nostr/filter"
 	"github.com/gorilla/websocket"
+	"github.com/timshannon/badgerhold/v4"
 )
 
 const (
@@ -186,28 +187,38 @@ func saveEvent(body []byte) error {
 		return errors.New("signature invalid")
 	}
 
+	//query to find all events with matching pubkey and kind = 0
+	evtKindSetMetadataQuery := db.Find(&event.Event{}, badgerhold.Where("pubkey").Eq(evt.PubKey).And("kind").Eq(0))
+	evtKindRecommendServerQuery := db.Find(&event.Event{}, badgerhold.Where("pubkey").Eq(evt.PubKey).And("kind").Eq(2).And("content").Eq(evt.Content))
+	evtKindContactListQuery := db.Find(&event.Event{}, badgerhold.Where("pubkey").Eq(evt.PubKey).And("kind").Eq(3))
+
 	// react to different kinds of events
 	switch evt.Kind {
 	case event.KindSetMetadata:
 		// delete past set_metadata events from this user
-		db.Exec(`DELETE FROM event WHERE pubkey = $1 AND kind = 0`, evt.PubKey)
+		db.DeleteMatching(event.Event{}, evtKindSetMetadataQuery)
+		//db.Exec(`DELETE FROM event WHERE pubkey = $1 AND kind = 0`, evt.PubKey)
 	case event.KindTextNote:
 		// do nothing
 	case event.KindRecommendServer:
 		// delete past recommend_server events equal to this one
-		db.Exec(`DELETE FROM event WHERE pubkey = $1 AND kind = 2 AND content = $2`,
-			evt.PubKey, evt.Content)
+		db.DeleteMatching(event.Event{}, evtKindRecommendServerQuery)
+		//db.Exec(`DELETE FROM event WHERE pubkey = $1 AND kind = 2 AND content = $2`, evt.PubKey, evt.Content)
 	case event.KindContactList:
 		// delete past contact lists from this same pubkey
-		db.Exec(`DELETE FROM event WHERE pubkey = $1 AND kind = 3`, evt.PubKey)
+		db.DeleteMatching(event.Event{}, evtKindContactListQuery)
+		//db.Exec(`DELETE FROM event WHERE pubkey = $1 AND kind = 3`, evt.PubKey)
 	}
 
 	// insert
 	tagsj, _ := json.Marshal(evt.Tags)
+	err = db.Insert(evt.ID, &evt)
+	/*
 	_, err = db.Exec(`
         INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
     `, evt.ID, evt.PubKey, evt.CreatedAt, evt.Kind, tagsj, evt.Content, evt.Sig)
+	*/
 	if err != nil {
 		if strings.Index(err.Error(), "UNIQUE") != -1 {
 			// already exists

@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/jmoiron/sqlx"
-	"github.com/jmoiron/sqlx/reflectx"
+	//"github.com/jmoiron/sqlx"
+	//"github.com/jmoiron/sqlx/reflectx"
 	"github.com/kelseyhightower/envconfig"
+	"github.com/timshannon/badgerhold/v4"
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 )
@@ -16,14 +17,11 @@ import (
 type Settings struct {
 	Host string `envconfig:"HOST" default:"0.0.0.0"`
 	Port string `envconfig:"PORT" default:"7447"`
-
-	PostgresDatabase string `envconfig:"POSTGRESQL_DATABASE"`
-	SQLiteDatabase   string `envconfig:"SQLITE_DATABASE"`
 }
 
 var s Settings
 var err error
-var db *sqlx.DB
+var db *badgerhold.Store
 var log = zerolog.New(os.Stderr).Output(zerolog.ConsoleWriter{Out: os.Stderr})
 var router = mux.NewRouter()
 
@@ -32,12 +30,12 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("couldn't process envconfig")
 	}
-
+	
 	db, err = initDB()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to open database")
 	}
-	db.Mapper = reflectx.NewMapperFunc("json", sqlx.NameMapper)
+	//db.Mapper = reflectx.NewMapperFunc("json", sqlx.NameMapper)
 
 	// NIP01
 	router.Path("/").Methods("GET").HandlerFunc(handleWebsocket)
