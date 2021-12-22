@@ -1,30 +1,32 @@
 package main
 
 import (
-	"database/sql"
+	//"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	//"strings"
-
+	"github.com/timshannon/badgerhold/v4"
 	"github.com/fiatjaf/go-nostr/event"
 	"github.com/fiatjaf/go-nostr/filter"
 )
 
 func queryEvents(filter *filter.EventFilter) (events []event.Event, err error) {
 	var id string
-	var author string
-	var kind uint8
+	var kind *int
 	var authors []string
 	var tagEvent string
 	var tagProfile string
 	var since uint32
+	//var filterFields []interface{}
+	var dbQuery = &badgerhold.Query{}
+	//var eventsReturn []event.Event
+	var filterFields = make(map[string]interface{})
 
-	var eventsReturn []event.Event
-	dbQueryInterface := *badgerhold.Query{}
+	//dbQueryInterface := *badgerhold.Query{}
 	//evtKindSetMetadataQuery := db.Find(&event.Event{}, badgerhold.Where("pubkey").Eq(evt.PubKey).And("kind").Eq(0))
-	var conditions []string
-	var params []interface{}
+	//var conditions []string
+	//var params []interface{}
 
 	if filter == nil {
 		err = errors.New("filter cannot be null")
@@ -35,43 +37,18 @@ func queryEvents(filter *filter.EventFilter) (events []event.Event, err error) {
 		//conditions = append(conditions, "id = ?")
 		//params = append(params, filter.ID)
 		id = filter.ID
-		dbQueryFilterID := badgerhold.Where("id").Eq(id)
-		dbQuery := dbQueryFilterID
-	}
-
-	if filter.Author != "" {
-		//conditions = append(conditions, "pubkey = ?")
-		//params = append(params, filter.Author)
-		author = filter.Author
-		if dbQueryFilterID {
-			// filter on ID and Author
-			dbQueryFilterAuthorID := badgerhold.Where("id").Eq(id).And("pubkey").Eq(author)
-			dbQuery := dbQueryFilterAuthorID 
-		}
-		else {
-			// filter on just author 
-			dbQueryFilterAuthor := badgerhold.Where("pubkey").Eq(author) 
-		}
+		filterFields["id"] = id
+		
+		dbQuery = badgerhold.Where("ID").Eq(id)
 	}
 
 	if filter.Kind != nil && *filter.Kind != 0 {
-		conditions = append(conditions, "kind = ?")
-		params = append(params, filter.Kind)
+		//conditions = append(conditions, "kind = ?")
+		//params = append(params, filter.Kind)
 		kind = filter.Kind
-		if dbQueryFilterAuthorID {
-			// filter on ID, Author, and kind
-			dbQueryFilterKindAuthorID := badgerhold.Where("id").Eq(id).And("pubkey").Eq(author).And("kind").Eq(kind)
-			dbQuery := dbQueryFilterKindAuthorID 
-		} 
-		else if dbQueryFilterID {
-			// filter on ID and Kind
-			dbQueryFilterKindID := badgerhold.Where("id").Eq(id).And("kind").Eq(kind)
-			dbQuery := dbQueryFilterKindID
-		} else {
-			// filter on just Kind
-			dbQueryFilterKind := badgerhold.Where("kind").Eq(kind)
-			dbQuery := dbQueryFilterKind
-		}
+		//filterFields = append(filterFields, kind)
+		filterFields["kind"] = kind
+		dbQuery = dbQuery.And("Kind").Eq(kind)
 	}
 
 	if filter.Authors != nil {
@@ -79,7 +56,7 @@ func queryEvents(filter *filter.EventFilter) (events []event.Event, err error) {
 			// authors being [] means you won't get anything
 			return
 		} else {
-			inkeys := make([]string, 0, len(filter.Authors))
+			//inkeys := make([]string, 0, len(filter.Authors))
 			for _, key := range filter.Authors {
 				// to prevent sql attack here we will check if
 				// these keys are valid 32byte hex
@@ -88,26 +65,11 @@ func queryEvents(filter *filter.EventFilter) (events []event.Event, err error) {
 					continue
 				}
 				//inkeys = append(inkeys, fmt.Sprintf("'%x'", parsed))
-				authors = append(authors, parsed.(string))
+				authors = append(authors, string(parsed))
+				filterFields["authors"] = authors
+				//filterFields = append(filterFields, authors)
 			}
-			if dbQueryFilterKindAuthorID {
-				// filter on ID, Author, kind, and Authors
-				dbQueryFilterAuthorsKindAuthorID := badgerhold.Where("id").Eq(id).And("pubkey").Eq(author).And("kind").Eq(kind).And("authors").In(authors)
-				dbQuery := dbQueryFilterAuthorsKindAuthorID
-			} 
-			else if dbQueryFilterKindID {
-				// filter on ID, Kind, and Authors
-				dbQueryFilterAuthorsKindID := badgerhold.Where("id").Eq(id).And("kind").Eq(kind).And("authors").In(authors)
-				dbQuery := dbQueryFilterAuthorsKindID
-			} else if dbQueryFilterKind {
-				// filter on Kind and Authors
-				dbQueryFilterAuthorsKind := badgerhold.Where("kind").Eq(kind).And("authors").In(authors)
-				dbQuery := dbQueryFilterAuthorsKind
-			} 
-			else {
-				// filter on just Authors
-				dbQueryFilterAuthors := badgerhold.Where("authors").In(authors)
-			}
+			dbQuery = dbQuery.And("Authors").In(authors)
 			//conditions = append(conditions, `pubkey IN (`+strings.Join(inkeys, ",")+`)`)
 		}
 	}
@@ -116,53 +78,32 @@ func queryEvents(filter *filter.EventFilter) (events []event.Event, err error) {
 		//conditions = append(conditions, relatedEventsCondition)
 		//params = append(params, filter.TagEvent)
 		tagEvent = filter.TagEvent
-		
-		if dbQueryFilterAuthorsKindAuthorID {
-			// filter on ID, Author, Kind, Authors, and tagEvent
-			dbQueryFilterAuthorsKindAuthorID := badgerhold.Where("id").Eq(id).And("pubkey").Eq(author).And("kind").Eq(kind).And("authors").In(authors).And("tags").Eq(tagEvent)
-		}
-		else if dbQueryFilterKindAuthorID {
-			// filter on ID, Author, kind, and tagEvent
-			dbQueryFilterTagEventKindAuthorID := badgerhold.Where("id").Eq(id).And("pubkey").Eq(author).And("kind").Eq(kind).And("tags").Eq(tagEvent)
-			dbQuery := dbQueryFilterAuthorsKindAuthorID
-		} 
-		else if dbQueryFilterKindID {
-			// filter on ID, Kind, and tagEvent
-			dbQueryFilterTagEventKindID := badgerhold.Where("id").Eq(id).And("kind").Eq(kind).And("authors").In(authors)
-			dbQuery := dbQueryFilterAuthorsKindID
-		} else if dbQueryFilterKind {
-			// filter on Kind and Authors
-			dbQueryFilterAuthorsKind := badgerhold.Where("kind").Eq(kind).And("authors").In(authors)
-			dbQuery := dbQueryFilterAuthorsKind
-		} 
-		else {
-			// filter on just Authors
-			dbQueryFilterAuthors := badgerhold.Where("authors").In(authors)
-		}
+		//filterFields = append(filterFields, tagEvent)
+		filterFields["tagEvent"] = tagEvent
+		dbQuery = dbQuery.And("Tags").Eq(tagEvent)
 	}
 
 	if filter.TagProfile != "" {
 		//conditions = append(conditions, relatedEventsCondition)
 		//params = append(params, filter.TagProfile)
 		tagProfile = filter.TagProfile
-		if dbQuery == "badgerhold" {
-			dbQuery = dbQuery + ".Where(\"tags\").Eq(tagProfile)"
-		} else {
-			dbQuery = dbQuery + ".And(\"tags\").Eq(tagProfile)"
-		}
+		//filterFields = append(filterFields, tagProfile)
+		filterFields["tagProfile"] = tagProfile
+		dbQuery = dbQuery.And("Tags").Eq(tagProfile)
 	}
 
 	if filter.Since != 0 {
 		//conditions = append(conditions, "created_at > ?")
 		//params = append(params, filter.Since)
 		since = filter.Since
-		if dbQuery == "badgerhold" {
-			dbQuery = dbQuery + ".Where(\"created_at\").Gt(since)"
-		} else {
-			dbQuery = dbQuery + ".And(\"created_at\").Gt(since)"
-		}
+		//filterFields = append(filterFields, since)
+		filterFields["since"] = since
+		dbQuery = dbQuery.And("CreatedAt").Gt(since)
 	}
 
+	for i, v := range filterFields {
+		fmt.Println(i, v)
+	}
 	/*
 	if len(conditions) == 0 {
 		// fallback
@@ -170,21 +111,21 @@ func queryEvents(filter *filter.EventFilter) (events []event.Event, err error) {
 	}
 	*/
 
-	fmt.Println(dbQuery)
 	//dbQuery = "db.Find(&event.Event{}, " + dbQuery + ")"
-	fmt.Println(dbQuery)
-	dbQueryInterface = dbQuery
+	//fmt.Println(dbQuery)
+	//dbQueryInterface = dbQuery
 	/*
 	query := db.Rebind("SELECT * FROM event WHERE " +
 		strings.Join(conditions, " AND ") +
 		" ORDER BY created_at LIMIT 100")
 	*/
-	events = db.Find(&event.Event{}, dbQuery )
-	err = db.Select(&events, query, params...)
-	if err != nil && err != sql.ErrNoRows {
+	err = db.Find(&events, dbQuery)
+	//err = db.Select(&events, query, params...)
+	
+	if err != nil {
 		log.Warn().Err(err).Interface("filter", filter).Msg("failed to fetch events")
 		err = fmt.Errorf("failed to fetch events: %w", err)
 	}
-
+	
 	return
 }

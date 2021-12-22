@@ -86,6 +86,7 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				if err != nil {
+					err = nil
 					return
 				}
 
@@ -105,14 +106,14 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 
-					filters := make([]*filter.EventFilter, len(request)-2)
+					filters := make(filter.EventFilters, len(request)-2)
 					for i, filterReq := range request[2:] {
 						err = json.Unmarshal(filterReq, &filters[i])
 						if err != nil {
 							return
 						}
 
-						events, err := queryEvents(filters[i])
+						events, err := queryEvents(&filters[i])
 						if err == nil {
 							for _, event := range events {
 								conn.WriteJSON([]interface{}{"EVENT", id, event})
@@ -130,7 +131,7 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 
-					removeListener(id)
+					removeListener(conn, id)
 				}
 			}(message)
 		}
@@ -188,9 +189,9 @@ func saveEvent(body []byte) error {
 	}
 
 	//query to find all events with matching pubkey and kind = 0
-	evtKindSetMetadataQuery := db.Find(&event.Event{}, badgerhold.Where("pubkey").Eq(evt.PubKey).And("kind").Eq(0))
-	evtKindRecommendServerQuery := db.Find(&event.Event{}, badgerhold.Where("pubkey").Eq(evt.PubKey).And("kind").Eq(2).And("content").Eq(evt.Content))
-	evtKindContactListQuery := db.Find(&event.Event{}, badgerhold.Where("pubkey").Eq(evt.PubKey).And("kind").Eq(3))
+	evtKindSetMetadataQuery := badgerhold.Where("PubKey").Eq(evt.PubKey).And("Kind").Eq(0)
+	evtKindRecommendServerQuery := badgerhold.Where("PubKey").Eq(evt.PubKey).And("Kind").Eq(2).And("Content").Eq(evt.Content)
+	evtKindContactListQuery := badgerhold.Where("PubKey").Eq(evt.PubKey).And("Kind").Eq(3)
 
 	// react to different kinds of events
 	switch evt.Kind {
@@ -211,7 +212,7 @@ func saveEvent(body []byte) error {
 	}
 
 	// insert
-	tagsj, _ := json.Marshal(evt.Tags)
+	//tagsj, _ := json.Marshal(evt.Tags)
 	err = db.Insert(evt.ID, &evt)
 	/*
 	_, err = db.Exec(`
@@ -225,7 +226,7 @@ func saveEvent(body []byte) error {
 			return nil
 		}
 
-		log.Warn().Err(err).Str("pubkey", evt.PubKey).Msg("failed to save")
+		log.Warn().Err(err).Str("PubKey", evt.PubKey).Msg("failed to save")
 		return errors.New("failed to save event")
 	}
 

@@ -1,5 +1,4 @@
 // +build lite
-
 package main
 
 import (
@@ -9,11 +8,14 @@ import (
 	//_ "github.com/mattn/go-sqlite3"
 )
 var dbPath = "/tmp/db"
+var options = badgerhold.DefaultOptions
 
-func initDB() (*badgerhold.Store, err){
-	db, err := badgerhold.Open(badgerhold.DefaultOptions(dbPath))
+func initDB() (*badgerhold.Store, error){
+	options.Dir = "/tmp/db"
+	options.ValueDir = "/tmp/db"
+	db, err := badgerhold.Open(options)
 	if err != nil {
-		fmt.Println(err)
+		return nil, err
 	}
 
 
